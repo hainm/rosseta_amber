@@ -8,6 +8,6 @@
 
 # require: mpi4py (conda install mpi4py)
 
-cd /project1/dacase-001/haichit/rosseta_amber/
+# cd your_working_folder
 
 mpirun -n 1 python run_min.py -O -p prmtop -c *.rst7 -i min.in
