@@ -10,4 +10,4 @@
 
 cd /project1/dacase-001/haichit/rosseta_amber/
 
-mpirun -n 1 python run_min.py -p prmtop -c *.rst7 -i min.in
+mpirun -n 1 python run_min.py -O -p prmtop -c *.rst7 -i min.in

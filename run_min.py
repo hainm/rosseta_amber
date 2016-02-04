@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+
 import os
 import subprocess
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
 
 rank, n_cores = comm.rank, comm.size
+
 
 def split_range(n_chunks, start, stop):
     '''split a given range to n_chunks
@@ -24,16 +26,18 @@ def split_range(n_chunks, start, stop):
         list_of_tuple.append((start + i * chunksize, _stop))
     return list_of_tuple
 
+
 def run_each_core(pdbs, kwd):
     '''run a chunk of pdbs in each core
     '''
     for code in partial_codes:
-        run_sander = (run_sander_template
-                     .strip()
-                     .format(**kwd)
-                     )
-        
+        run_sander = (command_template
+                      .strip()
+                      .format(**kwd)
+                      )
+
         subprocess.call(' '.join(run_sander.split('\n')), shell=True)
+
 
 def get_codes_for_my_rank(pdbs, rank):
     n_ligands = len(pdbs)
@@ -42,14 +46,56 @@ def get_codes_for_my_rank(pdbs, rank):
 
 
 if __name__ == '__main__':
-    run_sander_template = '{sander} -i {minin} -p {prmtop} -c {code}.rst7 -r {code}.min.rst7'
-    
-    cwd = os.getcwd()
-    amber_library = os.path.join(cwd, 'amber_library')
-    ligand_list = os.environ.get('LIGAND_CODES', amber_library + '/source/casegroup/pdbs.dat')
-    
-    with open(ligand_list, 'r') as fh:
-        pdbs = [line.split()[-1] for line in fh.readlines()]
+    import sys
+    from glob import glob
+    import argparse
 
-   partial_codes = get_codes_for_my_rank(pdbs, rank)
-    run_each_core(partial_codes)
+    try:
+        sys.argv.remove('-O')
+        overwrite = '-O'
+    except ValueError:
+        overwrite = ''
+    print(sys.argv)
+
+    description = '''
+    Example: mpirun -n 8 python {my_program} -p prmtop -c *.rst7 -i min.in
+    '''.strip().format(my_program=sys.argv[0])
+
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('-p', help='prmtop')
+    parser.add_argument('-c', help='pattern to search for rst7 files')
+    parser.add_argument('-i', help='min.in file')
+
+    args = parser.parse_args()
+
+    assert args.p, 'must provide prmtop file -p'
+    assert args.c, 'must provide pattern for restart files -c'
+
+    rst7_files = glob(args.c)
+
+    try:
+        os.mkdir('out')
+    except OSError:
+        pass
+
+    command_template = '{sander} {overwrite} -i {minin} -p {prmtop} -c {rst7} -r min.{rst7} -o out/out.{rst7}'
+
+    for rst7 in rst7_files:
+        command = command_template.format(
+            sander='sander',
+            overwrite=overwrite,
+            minin=args.i,
+            prmtop=args.p,
+            rst7=rst7)
+        print(command)
+        os.system(command)
+    #
+    # cwd = os.getcwd()
+    # amber_library = os.path.join(cwd, 'amber_library')
+    # ligand_list = os.environ.get('LIGAND_CODES', amber_library + '/source/casegroup/pdbs.dat')
+    #
+    # with open(ligand_list, 'r') as fh:
+    #     pdbs = [line.split()[-1] for line in fh.readlines()]
+
+    # partial_codes = get_codes_for_my_rank(pdbs, rank)
+    # run_each_core(partial_codes)
