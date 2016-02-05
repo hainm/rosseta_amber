@@ -55,23 +55,20 @@ if __name__ == '__main__':
         overwrite = '-O'
     except ValueError:
         overwrite = ''
-    print(sys.argv)
 
     description = '''
     Example: mpirun -n 8 python {my_program} -p prmtop -c *.rst7 -i min.in
     '''.strip().format(my_program=sys.argv[0])
 
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('-p', help='prmtop')
-    parser.add_argument('-c', help='pattern to search for rst7 files')
-    parser.add_argument('-i', help='min.in file')
+    parser.add_argument('-p', dest='prmtop', help='prmtop', required=True)
+    parser.add_argument('-c', dest='restart_pattern',
+                        required=True, help='pattern to search for rst7 files')
+    parser.add_argument('-i', dest='mdin', required=True, help='min.in file')
 
     args = parser.parse_args()
 
-    assert args.p, 'must provide prmtop file -p'
-    assert args.c, 'must provide pattern for restart files -c'
-
-    rst7_files = glob(args.c)
+    rst7_files = glob(args.restart_pattern)
 
     try:
         os.mkdir('out')
@@ -84,8 +81,8 @@ if __name__ == '__main__':
         command = command_template.format(
             sander='sander',
             overwrite=overwrite,
-            minin=args.i,
-            prmtop=args.p,
+            minin=args.mdin,
+            prmtop=args.prmtop,
             rst7=rst7)
         print(command)
         os.system(command)
