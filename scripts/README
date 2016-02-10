@@ -1,0 +1,4 @@
+python ConvertToPDBandSubmitMinimizationJobs.py -n 1l8r -d 2 -m `pwd`/min/min.in -p 30
+
+./scripts/elf1/submit_elf1.py --over-write --code=1kaf --submit --engine=multiprocessing --run-script=`pwd`/scripts/elf1/run_min_multiprocessing.py
+./scripts/elf1/submit_elf1.py --over-write --code=1kaf --submit
