@@ -1,4 +1,77 @@
-python ConvertToPDBandSubmitMinimizationJobs.py -n 1l8r -d 2 -m `pwd`/min/min.in -p 30
+========== ConvertToPDBandSubmitMinimizationJobs.py ==========
+Author: Kristin Blacklock
+Date: 2/5/2016
+==============================================================
 
-./scripts/elf1/submit_elf1.py --over-write --code=1kaf --submit --engine=multiprocessing --run-script=`pwd`/scripts/elf1/run_min_multiprocessing.py
-./scripts/elf1/submit_elf1.py --over-write --code=1kaf --submit
+To begin, edit the variables PATH_TO_DECOYDISC and AMBER_HOME to reflect the paths to your DecoyDiscrimination and AMBER home directories.
+    - PATH_TO_DECOYDISC is the path to the DecoyDiscrimination folder, which should include the extract_pdbs.static.linuxclangrelease executable as well as the directories: 
+        decoys.set1.init/, 
+        decoys.set2.init/, 
+        Natives/, 
+        scripts/, 
+        Rosetta_Database/
+
+    - AMBER_HOME is the path to the directory containing the amber.sh sourcefile.
+
+    OPTIONAL PATHS:
+    - If the extract_pdbs.static.linuxclangrelease executable is moved or changed, the ROSETTA_BIN variable can be used to specify the new path to the executable.
+
+    - If the Rosetta_Database directory is moved or changed, the ROSETTA_DB variable can be changed to specify the new path to the database.
+
+
+==========
+  Usage:
+==========
+    python ConvertToPDBandSubmitMinimizationJobs.py -n <native_pdb_id> -d <1_or_2> -m <path_to_minimization_script> -t <total_num_jobs>
+    or 
+    python ConvertToPDBandSubmitMinimizationJobs.py -n <native_pdb_id> -d <1_or_2> -m <path_to_minimization_script> -p <total_num_minimizations_per_job>
+
+==================
+Flag descriptions:
+==================
+    -n or --in:file:native :   The Native PDB ID (with or without ".pdb" file ending). Should be a pdb that exists in the DecoyDiscrimination/Natives/ folder.
+
+    -d or --decoy_set : An integer specifying the decoy set that contains the correct native silent file to expand and minimize.  
+    
+    -t or --total_num_jobs :   An integer specifying how many total jobs to submit to the queueing system.
+        
+        OR -p or --num_minimizations_per_job :   An integer specifying the maximum number of sequential minimization scripts per job. 
+        
+        Note: Do not use both -t and -p concurrently. If neither flag is set by the user, -p will default to 40.
+
+    -m or --minimization_script :   The entire path to the minimization script to use during Amber minimization.
+
+
+===============
+Script Details:
+===============
+After the user input is gathered, a new directory is made (named after the Native PDB ID) in /DecoyDiscrimination/decoys.set#.init/ and will be the working directory for this set of decoys. The corresponding silent file is extracted inside working directory, creating about 1000 empty*.pdb files, which are the decoy PDB files for this native.
+
+The cleaned native PDB (ATOM lines only) is also copied into the working directory for concurrent minimization and analysis.
+
+Every PDB in the working directory is stripped of hydrogen atoms and saved as NoH_*.pdb.
+
+A tleap.in template file is made in the working directory and each NoH_*.pdb file is sequentially substituted into the tleap.in file, which is input into tleap to generate the .rst7 and .parm7 files. The minimization command for this PDB is generated and saved in a list of minimization commands.
+
+If the --total_num_jobs flag is used, the number of minimization jobs per script (num_mins) is calculated and the list of minimization commands are chunked into a list of lists, each containing a maximum of <num_mins> minimization commands.
+
+    If instead the --num_minimizations_per_job flag is used, the minimization commands are chunked into a list of lists, each containing a maximum of <num_minimizations_per_job> minimization commands.
+
+    If neither are used, the script defaults the num_minimizations_per_job variable to 40.
+
+For each sublist of minimization commands, a MinimizationScript file is generated and squeued. i
+
+Example MinimizationScript.sh file for the 1ez3 native:
+MinimizationScript1.sh:
+    #!/bin/bash
+    #SBATCH -n 1
+    #SBATCH -c 1
+    #SBATCH -o MinimizationScript1.out
+    #SBATCH --job-name=1aajM1
+
+    source /scratch/kmb413/amber_jan142016/amber.sh
+
+    sander -i /scratch/kmb413/DecoyDiscrimination/scripts/min/min.in -o NoH_1ez3.out -p NoH_1ez3.parm7 -c NoH_1ez3.rst7 -r min_NoH_1ez3.rst7 -ref NoH_1ez3.rst7
+    <minimization command 2>
+    ...
+    <minimization command (num_mins)>
