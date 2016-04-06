@@ -26,11 +26,15 @@ Notes
 import os
 import sys
 import time
+from copy import deepcopy
 import subprocess
 from glob import glob, iglob
 import argparse
 from argparse import RawTextHelpFormatter
 from contextlib import contextmanager
+
+sys.path.append('.')
+from utils import split_range
 
 SLURM_TEMPLATE = '''#!/bin/sh
 #SBATCH -J {job_name}
@@ -40,6 +44,23 @@ SLURM_TEMPLATE = '''#!/bin/sh
 #SBATCH -N {n_nodes}
 #SBATCH -t {time}:00:00
 
+cd {pwd}
+run_script={run_script}
+minfile={minfile}
+prmtop={prmtop}
+
+mpirun -n {total_cores} $run_script {overwrite} -p $prmtop -c "{rst7_pattern}" -i $minfile {only_unfinished}
+'''
+
+SLURM_TEMPLATE_HEAD = '''#!/bin/sh
+#SBATCH -J {job_name}
+#SBATCH -o {job_name}.%J.stdout
+#SBATCH -e {job_name}.%J.stderr
+#SBATCH -p {job_type}
+#SBATCH -N {n_nodes}
+#SBATCH -t {time}:00:00'''
+
+SLURM_TEMPLATE_BODY = '''
 cd {pwd}
 run_script={run_script}
 minfile={minfile}
@@ -168,8 +189,12 @@ def parse_args():
     parser.add_argument(
         '-g',
         '--grouping',
-        default=True,
-        help="group all command to a single script", action='store_true')
+        help="group all command to a single script", action='store_false')
+    parser.add_argument(
+        '-nc',
+        '--n-chunks',
+        help='number of nodes, default 1',
+        default=1, type=int)
 
     args = parser.parse_args(sys.argv[1:])
     return args
@@ -207,6 +232,8 @@ def run_min_each_folder(code_dir, job_name, args):
     minus_o = '-O' if args.over_write else ''
     min_type = args.min_type
 
+    COMMAND = ''
+
     if min_type not in [5, 6]:
         idir = iglob(code_dir + '/*' + args.prmtop_ext)
     else:
@@ -221,11 +248,12 @@ def run_min_each_folder(code_dir, job_name, args):
 
         with temp_change_dir(code_dir):
             # run minimization without restraint
-            option_dict = dict(
+            option_dict_head = dict(
                 job_name=job_name,
                 job_type=args.job_type,
                 n_nodes=args.n_nodes,
-                time=args.time,
+                time=args.time)
+            option_dict_body = dict(
                 overwrite=minus_o,
                 total_cores=total_cores,
                 only_unfinished=only_unfinished,
@@ -235,20 +263,26 @@ def run_min_each_folder(code_dir, job_name, args):
                 rst7_pattern=args.rst7_pattern)
 
             if min_type in [0, 1]:
-                with open('submit.sh', 'w') as fh:
-                    minfile = os.path.abspath(args.root_min_dir) + '/min.in'
-                    option_dict['minfile'] = minfile
-                    sbatch_content = SLURM_TEMPLATE.format(**option_dict)
+                minfile = os.path.abspath(args.root_min_dir) + '/min.in'
+                option_dict['minfile'] = minfile
+                option_dict = deepcopy(option_dict_head)
+                option_dict.update(option_dict_body)
 
-                    if args.engine != 'mpi':
-                        # use multiprocessing
-                        sbatch_content = sbatch_content.replace(mpi_words, '')
-                    fh.write(sbatch_content)
+                if not args.grouping:
+                    with open('submit.sh', 'w') as fh:
+                        sbatch_content = SLURM_TEMPLATE.format(**option_dict)
 
-                if args.submit:
-                    cm = args.cmd + ' submit.sh'
-                    time.sleep(args.sleep)
-                    os.system(cm)
+                        if args.engine != 'mpi':
+                            # use multiprocessing
+                            sbatch_content = sbatch_content.replace(mpi_words, '')
+                        fh.write(sbatch_content)
+
+                    if args.submit:
+                        cm = args.cmd + ' submit.sh'
+                        time.sleep(args.sleep)
+                        os.system(cm)
+                else:
+                    COMMAND = SLURM_TEMPLATE_BODY.format(option_dict_body)
 
             # run minimization with restraint
             extend_min_flags = [0, 2, 3, 4, 5, 6]
@@ -280,26 +314,37 @@ def run_min_each_folder(code_dir, job_name, args):
                     raise ValueError("min_type must be {}".format(str(extend_min_flags)))
                 print('Using minfile = {}'.format(minfile))
 
-                with temp_change_dir(os.path.abspath(my_dir)):
-                    print('going to {}'.format(my_dir))
-                    with open('submit.sh', 'w') as fh:
-                        option_dict['minfile'] = minfile
-                        option_dict['pwd'] = os.getcwd()
-                        option_dict['job_name'] = job_name + '.2'
-                        option_dict['rst7_pattern'] = '../' + args.rst7_pattern
-                        sbatch_content = SLURM_TEMPLATE.format(**option_dict)
-                        if args.engine != 'mpi':
-                            # use multiprocessing
-                            sbatch_content = sbatch_content.replace(mpi_words, '')
-                        fh.write(sbatch_content)
+                option_dict_head['job_name'] = job_name + '.2'
+                option_dict_body['minfile'] = minfile
+                option_dict_body['pwd'] = os.getcwd()
+                option_dict_body['rst7_pattern'] = '../' + args.rst7_pattern
+                option_dict = deepcopy(option_dict_head)
+                option_dict.update(option_dict_body)
 
-                    if args.submit:
-                        cm = args.cmd + ' submit.sh'
-                        time.sleep(args.sleep)
-                        os.system(cm)
+                if not args.grouping:
+                    with temp_change_dir(os.path.abspath(my_dir)):
+                        print('going to {}'.format(my_dir))
+                        with open('submit.sh', 'w') as fh:
+                            sbatch_content = SLURM_TEMPLATE.format(**option_dict)
+                            if args.engine != 'mpi':
+                                # use multiprocessing
+                                sbatch_content = sbatch_content.replace(mpi_words, '')
+                            fh.write(sbatch_content)
+
+                        if args.submit:
+                            cm = args.cmd + ' submit.sh'
+                            time.sleep(args.sleep)
+                            os.system(cm)
+                else:
+                    COMMAND = SLURM_TEMPLATE_BODY.format(**option_dict_body)
     except StopIteration:
         first_prmtop = ''
         print(code_dir)
+
+    option_dict_tmp = deepcopy(option_dict_head)
+    if args.grouping:
+        option_dict_tmp['job_name'] = 'rosetta_amber'
+    return COMMAND, SLURM_TEMPLATE_HEAD.format(**option_dict_tmp)
 
 
 def get_pdbcodes(args):
@@ -326,12 +371,46 @@ def get_pdbcodes(args):
     else:
         return get_all_pdb_codes(args) if args.code.lower() == 'all' else args.code.split(',')
 
+def write_group_jobs(joblist, SLURM_HEAD, args):
+    '''write to ./tmp_submit/ folder
+
+    Parameters
+    ----------
+    joblist : list of run commands
+    SLURM_HEAD : header of slurm sbatch file
+    '''
+
+    try:
+        os.mkdir('./tmp_submit')
+    except OSError:
+        pass
+
+    range_tuples = split_range(args.n_chunks, 0, len(joblist))
+
+    for idx, (start, stop) in enumerate(range_tuples):
+        slurm_body = '\n'.join(joblist[start:stop])
+        fn = './tmp_submit/submit_{}.sh'.format(idx)
+        with open(fn, 'w') as fh:
+            fh.write(SLURM_HEAD)
+            fh.write('\n\n\n')
+            fh.write(slurm_body)
+
 def submit(pdbcodes, args):
+    joblist = []
+    SLURM_HEAD = ''
+
     for code in pdbcodes:
         print("running code = {}".format(code))
         code_dir = get_dir_from_code(code, args)
+
         if code_dir is not None:
-            run_min_each_folder(code_dir, code, args)
+           slurm_body, SLURM_HEAD = run_min_each_folder(code_dir, code, args)
+           joblist.append(slurm_body)
+    if args.grouping:
+        # not submitting job
+        # print(''.join(joblist))
+        # print(SLURM_HEAD)
+        write_group_jobs(joblist, SLURM_HEAD, args)
 
 if __name__ == '__main__':
     args = parse_args()
