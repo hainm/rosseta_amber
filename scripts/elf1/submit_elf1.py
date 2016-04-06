@@ -36,6 +36,8 @@ from contextlib import contextmanager
 sys.path.append('.')
 from utils import split_range
 
+THIS_SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
+
 SLURM_TEMPLATE = '''#!/bin/sh
 #SBATCH -J {job_name}
 #SBATCH -o {job_name}.%J.stdout
@@ -103,6 +105,11 @@ def parse_args():
         help='type of job (main, development, short)', 
         default='main', type=str)
     parser.add_argument(
+        '-jn',
+        '--job-name',
+        help='job name', 
+        default='', type=str)
+    parser.add_argument(
         '-d',
         '--root',
         default='./',
@@ -157,7 +164,7 @@ def parse_args():
     parser.add_argument(
         '-rs',
         '--run-script',
-        default=os.path.abspath('scripts/elf1/run_min.py'),
+        default=os.path.join(THIS_SCRIPT_PATH, 'run_min.py'),
         help='script to run minimization for each protein; if not given, using scripts/elf1/run_min.py',
         type=str)
     parser.add_argument(
@@ -178,7 +185,7 @@ def parse_args():
     parser.add_argument(
         '-rmin',
         '--root-min-dir',
-        default=os.path.abspath('scripts/min/'),
+        default=os.path.join(THIS_SCRIPT_PATH, '../min/'),
         help='extension to search for folder having minimization input (min.in, min_norestraint.in), ./scripts/min/',
         type=str)
     parser.add_argument(
@@ -189,7 +196,7 @@ def parse_args():
     parser.add_argument(
         '-g',
         '--grouping',
-        help="group all command to a single script", action='store_false')
+        help="group all command to a single script", action='store_true')
     parser.add_argument(
         '-nc',
         '--n-chunks',
@@ -316,7 +323,7 @@ def run_min_each_folder(code_dir, job_name, args):
 
                 option_dict_head['job_name'] = job_name + '.2'
                 option_dict_body['minfile'] = minfile
-                option_dict_body['pwd'] = os.getcwd()
+                option_dict_body['pwd'] = os.path.abspath(my_dir)
                 option_dict_body['rst7_pattern'] = '../' + args.rst7_pattern
                 option_dict = deepcopy(option_dict_head)
                 option_dict.update(option_dict_body)
@@ -343,7 +350,7 @@ def run_min_each_folder(code_dir, job_name, args):
 
     option_dict_tmp = deepcopy(option_dict_head)
     if args.grouping:
-        option_dict_tmp['job_name'] = 'rosetta_amber'
+        option_dict_tmp['job_name'] = 'rosetta_amber' if not args.job_name else args.job_name
     return COMMAND, SLURM_TEMPLATE_HEAD.format(**option_dict_tmp)
 
 

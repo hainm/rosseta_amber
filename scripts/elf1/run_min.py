@@ -13,28 +13,12 @@ from glob import glob
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
 
+sys.path.append('.')
+from utils import split_range
+
 rank, n_cores = comm.rank, comm.size
 
 COMMAND_TEMPLATE = '{sander} {overwrite} -i {minin} -p {prmtop} -c {abspath_rst7} -r min_{rst7} -o out/min_{rst7_no_ext}.out -ref {abspath_rst7}'
-
-
-def split_range(n_chunks, start, stop):
-    '''split a given range to n_chunks
-
-    Examples
-    --------
-    >>> split_range(3, 0, 10)
-    [(0, 3), (3, 6), (6, 10)]
-    '''
-    list_of_tuple = []
-    chunksize = (stop - start) // n_chunks
-    for i in range(n_chunks):
-        if i < n_chunks - 1:
-            _stop = start + (i + 1) * chunksize
-        else:
-            _stop = stop
-        list_of_tuple.append((start + i * chunksize, _stop))
-    return list_of_tuple
 
 
 def run_each_core(cmlist):
@@ -56,22 +40,21 @@ def get_commands_for_my_rank(total_commands, rank):
     else:
         return ['echo nothing',]
 
-def get_unfinished_rst7_files():
+def get_unfinished_rst7_files(args):
     '''get not-run yet files or file has size of 0. Use absolute path
+    
+    args : ArgumentParser
     '''
     cwd = os.getcwd()
 
-    if 'no_restraint' in cwd:
-        orgin_rst7_dir = os.path.abspath('../')
-        rst_files = [fn.split('/')[-1] for fn in glob('../NoH*rst7')]
-    else:
-        orgin_rst7_dir = os.getcwd()
-        rst_files = glob('NoH*rst7')
+    all_old_restart_files = glob(args.restart_pattern)
+    rst7_files = [os.path.basename(x) for x in all_old_restart_files]
+    orgin_rst7_dir = os.path.dirname(all_old_restart_files[0])
     minfiles = glob('min_*rst7')
     
     MINSIZE = 1000 # bytes
     done_files = {x.strip('min_') for x in minfiles if os.path.getsize(x) > 1000}
-    return [os.path.join(orgin_rst7_dir, fn) for fn in set(rst_files) - done_files]
+    return [os.path.join(orgin_rst7_dir, fn) for fn in set(rst7_files) - done_files]
 
 try:
     sys.argv.remove('-O')
@@ -119,9 +102,13 @@ if __name__ == '__main__':
     args = get_args_cmdln()
 
     if args.only_unfinished:
-        rst7_files = get_unfinished_rst7_files()
+        rst7_files = get_unfinished_rst7_files(args)
     else:
         rst7_files = glob(args.restart_pattern)
+
+    if rank == 0:
+        pwd = '/'.join(os.getcwd().split('/')[-4:])
+        print('number of runs = {} in {}'.format(len(rst7_files), pwd))
 
     try:
         os.mkdir('out')

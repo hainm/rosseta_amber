@@ -109,6 +109,11 @@ def parse_args():
         help='pattern to search for rst7 files, default *.rst7', type=str)
     parser.add_argument('-u', '--only-unfinished', action='store_true')
     parser.add_argument(
+        '-jb',
+        '--jobname',
+        default='',
+        help='name that appear in cluster info', type=str)
+    parser.add_argument(
         '-m',
         '--min-type',
         default=0,
@@ -275,7 +280,8 @@ def submit(pdbcodes):
         print(code)
         code_dir = get_dir_from_code(code)
         if code_dir is not None:
-            run_min_each_folder(code_dir, code, args)
+            job_name = code if not args.jobname else args.jobname
+            run_min_each_folder(code_dir, job_name, args)
 
 if __name__ == '__main__':
     args = parse_args()
