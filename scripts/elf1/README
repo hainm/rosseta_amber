@@ -1,0 +1,7 @@
+TODO: better doc
+
+./pdb_from_rosetta.py: convert silent files to pdb files
+./generate_rst7_parm7_files.py: generate rst7 and parm files from pdb files
+./scripts/elf1/submit_elf1.py --over-write --code=1kaf --submit --engine=multiprocessing --run-script=`pwd`/scripts/elf1/run_min_multiprocessing.py
+./scripts/elf1/submit_elf1.py --over-write --code=1kaf --submit
+./check_finished_rst7.py: print a list of codes needed to run (should use --only-unfinished with submit_elf1.py)
