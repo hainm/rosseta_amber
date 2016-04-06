@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os
+import os, sys
 import subprocess
 from glob import iglob, glob
 
@@ -13,12 +13,14 @@ folders_with_num = []
 for fn in folders:
     min_restraints = glob('{}/min*rst7'.format(fn))
     min_no_restraints = glob('{}/no_restraint/min*rst7'.format(fn))
+    min_99sbigb1_restraints = glob('{}/99sb_igb1/res*new*/min*rst7'.format(fn))
+    min_99sbigb1_no_restraints = glob('{}/99sb_igb1/no*res*new*/min*rst7'.format(fn))
     total_rst7 = glob('{}/NoH_*rst7'.format(fn))
     folders_with_num.append([fn.replace('./', ''), len(total_rst7), len(
-        min_restraints), len(min_no_restraints)])
+        min_restraints), len(min_no_restraints), len(min_99sbigb1_restraints), len(min_99sbigb1_no_restraints)])
 
 sorted_folders_with_num = sorted([folder for folder in folders_with_num if folder[
-                        1:] != [0, 0, 0]], key=lambda x: -2 * x[1] + x[2] + x[3])
+                        1:] != [0, 0, 0, 0, 0]], key=lambda x: -4 * x[1] + x[2] + x[3] + x[4] + x[5])
 
 def get_running_jobs():
     _running_jobs = subprocess.check_output(
@@ -35,9 +37,13 @@ def get_restart_files_count(sorted_folders_with_num):
     for folder in sorted_folders_with_num:
         yield tuple(folder)
 
-def need_to_run(running_jobs):
-    will_be_submitted = set(x[0].strip(
-        './') for x in sorted_folders_with_num if 2 * x[1] - x[2] - x[3] > 0) - running_jobs
+def need_to_run(running_jobs, ignore_running_job=False):
+    if not ignore_running_job:
+        will_be_submitted = set(x[0].strip(
+            './') for x in sorted_folders_with_num if 4 * x[1] - x[2] - x[3] - x[4] - x[5] > 0) - running_jobs
+    else:
+        will_be_submitted = [x[0].strip(
+            './') for x in sorted_folders_with_num if 4 * x[1] - x[2] - x[3] - x[4] - x[5] > 0]
     
     joint_jobs = ','.join(will_be_submitted)
 
@@ -76,12 +82,17 @@ def check_missing_runs(restart_count_tuple, given_list):
             print('missing {}'.format(code))
 
 if __name__ == '__main__':
+    try:
+        sys.argv.remove('--ignore-running-job')
+        ignore_running_job = True
+    except ValueError:
+        ignore_running_job = False
     restart_count_tuple = list(get_restart_files_count(sorted_folders_with_num))
     for count_tuple in restart_count_tuple:
         print(count_tuple)
     running_jobs = get_running_jobs()
     print('total number of folders = {}'.format(len(folders)))
-    need_to_run(running_jobs)
+    need_to_run(running_jobs, ignore_running_job)
 
     given_list = """1t2p
     2ppp
