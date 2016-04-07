@@ -201,7 +201,7 @@ def parse_args():
     parser.add_argument(
         '-sf',
         '--shuffle',
-        help="group all command to a single script", action='store_true')
+        help="shuffle commands", action='store_true')
     parser.add_argument(
         '-nc',
         '--n-chunks',
