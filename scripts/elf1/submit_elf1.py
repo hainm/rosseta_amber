@@ -159,7 +159,8 @@ def parse_args():
              '3: with restraint, new min protocol (better);\n\t'
              '4: no restraint, new min protocol (better);\n\t'
              '5: with restraint, new min protocol (better), igb=1 (supposed to have 99sb_igb1 folder);\n\t'
-             '6: no restraint, new min protocol (better), igb=1 (supposed to have 99sb_igb1 folder);\n\t',
+             '6: no restraint, new min protocol (better), igb=1 (supposed to have 99sb_igb1 folder);\n\t'
+             '7: restraint all but loop, new min protocol (better); \n\t',
         type=int)
     parser.add_argument(
         '-rs',
@@ -196,6 +197,10 @@ def parse_args():
     parser.add_argument(
         '-g',
         '--grouping',
+        help="group all command to a single script", action='store_true')
+    parser.add_argument(
+        '-sf',
+        '--shuffle',
         help="group all command to a single script", action='store_true')
     parser.add_argument(
         '-nc',
@@ -291,8 +296,7 @@ def run_min_each_folder(code_dir, job_name, args):
                 else:
                     COMMAND = SLURM_TEMPLATE_BODY.format(option_dict_body)
 
-            # run minimization with restraint
-            extend_min_flags = [0, 2, 3, 4, 5, 6]
+            extend_min_flags = [0, 2, 3, 4, 5, 6, 7]
             if min_type in extend_min_flags:
                 if min_type in [0, 2]:
                     try:
@@ -317,6 +321,10 @@ def run_min_each_folder(code_dir, job_name, args):
                     my_dir = '99sb_igb1/no_restraint_new_protocol/'
                     force_mkdir(my_dir)
                     minfile = os.path.abspath(args.root_min_dir) + '/min_norestraint_new_igb1.in'
+                elif min_type == 7:
+                    my_dir = '.'
+                    # current folder
+                    minfile = os.path.abspath('min.in')
                 else:
                     raise ValueError("min_type must be {}".format(str(extend_min_flags)))
                 print('Using minfile = {}'.format(minfile))
@@ -324,7 +332,10 @@ def run_min_each_folder(code_dir, job_name, args):
                 option_dict_head['job_name'] = job_name + '.2'
                 option_dict_body['minfile'] = minfile
                 option_dict_body['pwd'] = os.path.abspath(my_dir)
-                option_dict_body['rst7_pattern'] = '../' + args.rst7_pattern
+                if min_type != 7:
+                    option_dict_body['rst7_pattern'] = '../' + args.rst7_pattern
+                else:
+                    option_dict_body['rst7_pattern'] = args.rst7_pattern
                 option_dict = deepcopy(option_dict_head)
                 option_dict.update(option_dict_body)
 
@@ -391,6 +402,10 @@ def write_group_jobs(joblist, SLURM_HEAD, args):
         os.mkdir('./tmp_submit')
     except OSError:
         pass
+
+    if args.shuffle:
+        from random import shuffle
+        shuffle(joblist)
 
     range_tuples = split_range(args.n_chunks, 0, len(joblist))
 

@@ -19,8 +19,9 @@ for fn in folders:
     folders_with_num.append([fn.replace('./', ''), len(total_rst7), len(
         min_restraints), len(min_no_restraints), len(min_99sbigb1_restraints), len(min_99sbigb1_no_restraints)])
 
-sorted_folders_with_num = sorted([folder for folder in folders_with_num if folder[
-                        1:] != [0, 0, 0, 0, 0]], key=lambda x: -4 * x[1] + x[2] + x[3] + x[4] + x[5])
+sorted_folders_with_num = sorted([folder for folder in folders_with_num 
+    if folder[1:] != [0, 0, 0, 0, 0]],
+    key=lambda x: -4 * x[1] + sum(x[2:]))
 
 def get_running_jobs():
     _running_jobs = subprocess.check_output(
@@ -40,10 +41,10 @@ def get_restart_files_count(sorted_folders_with_num):
 def need_to_run(running_jobs, ignore_running_job=False):
     if not ignore_running_job:
         will_be_submitted = set(x[0].strip(
-            './') for x in sorted_folders_with_num if 4 * x[1] - x[2] - x[3] - x[4] - x[5] > 0) - running_jobs
+            './') for x in sorted_folders_with_num if 4 * x[1] - sum(x[2:]) > 0) - running_jobs
     else:
         will_be_submitted = [x[0].strip(
-            './') for x in sorted_folders_with_num if 4 * x[1] - x[2] - x[3] - x[4] - x[5] > 0]
+            './') for x in sorted_folders_with_num if 4 * x[1] - sum(x[2:]) > 0]
     
     joint_jobs = ','.join(will_be_submitted)
 
@@ -90,6 +91,10 @@ if __name__ == '__main__':
     restart_count_tuple = list(get_restart_files_count(sorted_folders_with_num))
     for count_tuple in restart_count_tuple:
         print(count_tuple)
+
+    print('4th run is finished')
+    print(set(count_tuple[0] for count_tuple in restart_count_tuple if count_tuple[1] == count_tuple[4]))
+
     running_jobs = get_running_jobs()
     print('total number of folders = {}'.format(len(folders)))
     need_to_run(running_jobs, ignore_running_job)
