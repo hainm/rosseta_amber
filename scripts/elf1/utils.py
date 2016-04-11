@@ -18,6 +18,14 @@ def split_range(n_chunks, start, stop):
     '''
     list_of_tuple = []
     chunksize = (stop - start) // n_chunks
+
+    if chunksize == 0:
+        effective_n_chunk = stop - start
+        chunksize = 1
+    else:
+        effective_n_chunk = n_chunks
+        chunksize = chunksize
+    
     for i in range(n_chunks):
         if i < n_chunks - 1:
             _stop = start + (i + 1) * chunksize
@@ -25,3 +33,9 @@ def split_range(n_chunks, start, stop):
             _stop = stop
         list_of_tuple.append((start + i * chunksize, _stop))
     return list_of_tuple
+
+def force_mkdir(my_dir):
+    try:
+        os.mkdir(my_dir)
+    except OSError:
+        pass

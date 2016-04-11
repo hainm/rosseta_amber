@@ -31,11 +31,12 @@ def run_each_core(cmlist):
     for cm in cmlist:
         os.system(cm)
 
-def get_commands_for_my_rank(total_commands, rank):
-    n_structures = len(total_commands)
-    start, stop = split_range(n_cores, 0, n_structures)[rank]
-    sub_commands = total_commands[start: stop]
-    if sub_commands:
+def get_commands_for_my_rank(total_commands, rank, n_cores):
+    import numpy as np
+    arr = np.array(total_commands)
+
+    sub_commands = np.array_split(arr, n_cores)[rank]
+    if len(sub_commands) > 0:
         return sub_commands
     else:
         return ['echo nothing',]
@@ -116,6 +117,15 @@ if __name__ == '__main__':
         pass
 
     commands = get_total_commands(rst7_files)
-    myrank_cmlist = get_commands_for_my_rank(commands, rank)
+    myrank_cmlist = get_commands_for_my_rank(commands, rank, n_cores)
+
+    n_structures = len(myrank_cmlist)
+    x = comm.gather(n_structures, root=0)
+    if rank == 0:
+        print('max structures per node = {}'.format(max(x)))
     run_each_core(myrank_cmlist)
+
+    # debug
+    # if len(myrank_cmlist) > 3:
+    #     print('rank = {}, n_jobs = {}'.format(rank, len(myrank_cmlist)))
 
